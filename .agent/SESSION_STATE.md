@@ -7,19 +7,18 @@
 ---
 
 - **Last updated:** 2026-04-25
-- **Current phase:** Phase 4 COMPLETE — Phase 5 (Chat API Route) is next
-- **Current sub-step:** N/A — Phase 4 fully done and committed
+- **Current phase:** Phase 5 COMPLETE — Phase 6 (Chat UI) is next
+- **Current sub-step:** N/A — Phase 5 fully done and committed
 - **Completed this session:**
-  - Phase 3 checkpoint cleared: 54 articles indexed, 125 chunks in Pinecone (`rag-news` index).
-  - Phase 4: `lib/rag/retrieve.ts` (`retrieve()` + `buildPrompt()`), `scripts/retrieve-test.ts`. Checkpoint query returned 5 relevant tech results (scores 0.39–0.45). Committed as `1eecfd4`.
+  - Phase 5: `lib/llm.ts` (Anthropic model wrapper, `claude-sonnet-4-5`), `app/api/chat/route.ts` (POST handler). Fully verified: streaming with [Source N] citations, source-url parts, graceful fallback. Committed as `403b7ad`.
 - **In-progress:** Nothing.
-- **Next concrete step:** Start **Phase 5 — Chat API Route**. Read `.agent/plans/phase-5-chat-api.md` first.
+- **Next concrete step:** Start **Phase 6 — Chat UI**. Read `.agent/plans/phase-6-chat-ui.md` first.
 - **Blockers / open questions:**
-  - All API keys working. No blockers.
-  - SDK deviations to watch in Phase 5: Vercel AI SDK v6 (`ai` package), `@ai-sdk/anthropic` v3. The `streamText` API and `toDataStreamResponse` may differ from PDF snippet — verify against installed types.
-  - Zod v4 has a different import path for some things — use `zod` directly (already installed, v4.3.6).
-- **Pre-resume commands:** None needed.
-- **Last commit:** `1eecfd4` — Phase 4: retrieval + prompt construction
+  - **Important v6 API deviation for Phase 6:** The AI SDK v6 uses UIMessage protocol. The `useChat` hook is now from `ai/react` (same package, same import). Messages have a `parts` array — sources arrive as `source-url` parts (type `SourceUrlUIPart`), NOT as a `data` array like in v4. Phase 6 must read sources from `message.parts.filter(p => p.type === 'source-url')`, not from `data`.
+  - `react-markdown` + `remark-gfm` need to be installed (not yet in package.json).
+  - Tailwind v4 in use — no `tailwind.config.ts` file, styles via `app/globals.css` + postcss. shadcn components already added.
+- **Pre-resume commands:** `npm run dev` to verify server still starts clean.
+- **Last commit:** `403b7ad` — Phase 5: streaming chat API with RAG context + source annotations
 
 ---
 
