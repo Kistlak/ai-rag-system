@@ -1,10 +1,13 @@
 import { retrieve, buildPrompt } from "../lib/rag/retrieve";
 
-const query = process.argv.slice(2).find((a) => !a.startsWith("dotenv_config_"));
-if (!query) {
+const rawQuery = process.argv
+  .slice(2)
+  .find((a) => !a.startsWith("dotenv_config_"));
+if (!rawQuery) {
   console.error("Usage: npm run retrieve:test <query>");
   process.exit(1);
 }
+const query: string = rawQuery;
 
 async function main() {
   console.log(`Query: "${query}"\n`);
