@@ -7,19 +7,26 @@
 ---
 
 - **Last updated:** 2026-04-25
-- **Current phase:** Phase 2 COMPLETE — Phase 3 (Ingestion Pipeline) is next
-- **Current sub-step:** N/A — Phase 2 fully done and committed
+- **Current phase:** Phase 3 — CHECKPOINT BLOCKED (code complete, billing issue)
+- **Current sub-step:** Waiting for user to add OpenAI billing credit, then re-run `npm run ingest:local`
 - **Completed this session:**
-  - Phase 1: Next.js 16 scaffold, all RAG deps, shadcn/ui (button/input/card/scroll-area), `.env.example`.
-  - Phase 2: `lib/rag/types.ts` (ChunkMetadata with index sig, RetrievedChunk), `lib/rag/pinecone.ts` (singleton client, upsertChunks, queryByVector), `scripts/pinecone-smoke.ts`. Smoke test passed. Adapted for Pinecone SDK v7 (upsert takes `{records:[]}`, deleteOne takes `{id}`).
-- **In-progress:** Nothing.
-- **Next concrete step:** Start **Phase 3 — Ingestion Pipeline**. Read `.agent/plans/phase-3-ingestion.md` first.
+  - Phase 1 & 2: done (see git log).
+  - Phase 3 code: `lib/ingest/rss.ts`, `lib/ingest/article.ts`, `lib/rag/chunk.ts`, `lib/rag/embed.ts`, `lib/ingest/pipeline.ts`, `scripts/ingest-local.ts`. All tsc-clean. Committed as `1f347d1`.
+  - Confirmed working: RSS fetch, Pinecone dedup query, BBC article HTML extraction, chunking.
+  - Blocked at: `embed()` call — OpenAI returns `insufficient_quota` (no billing credit on account).
+- **In-progress:** Nothing. Waiting on user action.
+- **Next concrete step:**
+  1. User adds credit at platform.openai.com/billing.
+  2. Run `npm run ingest:local` — should index 50–150+ articles.
+  3. Confirm Pinecone dashboard shows vectors growing.
+  4. Re-run script a second time to verify dedup returns 0 new articles.
+  5. Commit checkpoint confirmation, then move to **Phase 4 — Retrieval Layer**.
 - **Blockers / open questions:**
-  - `OPENAI_API_KEY` is empty in `.env.local` — **must be filled in before Phase 3 can run** (embeddings call OpenAI).
-  - Pinecone index is named `rag-news` (not `bbc-news`). Code reads from env so it works fine.
-  - SDK deviations from PDF: Next.js 16 (not 14), Tailwind v4, Pinecone SDK v7, Vercel AI SDK v6, Zod v4. All working but PDF snippets need adaptation.
-- **Pre-resume commands:** None needed.
-- **Last commit:** `202df29` — Phase 2: Pinecone client wrapper + smoke test passing
+  - OpenAI `insufficient_quota` — user must add billing credit before ingest can run.
+  - Pinecone index name is `rag-news` (not `bbc-news`). Fine — code reads from env.
+  - SDK deviations: Next.js 16, Tailwind v4, Pinecone SDK v7, Vercel AI SDK v6, Zod v4. All working but PDF snippets need adaptation.
+- **Pre-resume commands:** `npm run ingest:local` (after billing is added)
+- **Last commit:** `1f347d1` — Phase 3: ingestion pipeline (RSS → chunk → embed → Pinecone)
 
 ---
 
