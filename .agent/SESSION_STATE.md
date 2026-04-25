@@ -7,25 +7,19 @@
 ---
 
 - **Last updated:** 2026-04-25
-- **Current phase:** Phase 1 COMPLETE — Phase 2 (Pinecone Setup) is next
-- **Current sub-step:** N/A — Phase 1 fully done and committed
+- **Current phase:** Phase 2 COMPLETE — Phase 3 (Ingestion Pipeline) is next
+- **Current sub-step:** N/A — Phase 2 fully done and committed
 - **Completed this session:**
-  - Scaffolded Next.js 14 (App Router, TypeScript, Tailwind CSS v4, ESLint) into repo root.
-  - Installed all core RAG deps: `ai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`, `@pinecone-database/pinecone`, `rss-parser`, `cheerio`, `zod`, `openai`.
-  - Initialized shadcn/ui (Radix/Nova preset, Tailwind v4 aware).
-  - Added shadcn components: `button`, `input`, `card`, `scroll-area`.
-  - Installed dev deps: `tsx`, `dotenv`.
-  - Created `.env.example` with all 5 required env var placeholders.
-  - Fixed `.gitignore` to allow `.env.example` while blocking `.env*.local`.
-  - Verified: `npx tsc --noEmit` passes, `npm run lint` passes, `localhost:3000` returns HTTP 200.
+  - Phase 1: Next.js 16 scaffold, all RAG deps, shadcn/ui (button/input/card/scroll-area), `.env.example`.
+  - Phase 2: `lib/rag/types.ts` (ChunkMetadata with index sig, RetrievedChunk), `lib/rag/pinecone.ts` (singleton client, upsertChunks, queryByVector), `scripts/pinecone-smoke.ts`. Smoke test passed. Adapted for Pinecone SDK v7 (upsert takes `{records:[]}`, deleteOne takes `{id}`).
 - **In-progress:** Nothing.
-- **Next concrete step:** Start **Phase 2 — Pinecone Setup**. Read `.agent/plans/phase-2-pinecone.md` first. User needs to: (1) create Pinecone account, (2) create serverless index `bbc-news` (1536 dims, cosine, AWS us-east-1), (3) fill in `.env.local` with all 5 keys.
+- **Next concrete step:** Start **Phase 3 — Ingestion Pipeline**. Read `.agent/plans/phase-3-ingestion.md` first.
 - **Blockers / open questions:**
-  - User must fill in `.env.local` (copy from `.env.example`) with real keys before Phase 2 can proceed.
-  - User must create Pinecone index `bbc-news` manually in the Pinecone console.
-  - Note: Tailwind CSS v4 was installed (not v3). shadcn `components.json` uses `nova` preset. If any component styling looks off, refer to Tailwind v4 migration docs.
-- **Pre-resume commands:** `npm run dev` (to confirm dev server still works after resuming).
-- **Last commit:** `d4f4b52` — Phase 1: Next.js + TypeScript + Tailwind + shadcn/ui scaffold with RAG deps installed
+  - `OPENAI_API_KEY` is empty in `.env.local` — **must be filled in before Phase 3 can run** (embeddings call OpenAI).
+  - Pinecone index is named `rag-news` (not `bbc-news`). Code reads from env so it works fine.
+  - SDK deviations from PDF: Next.js 16 (not 14), Tailwind v4, Pinecone SDK v7, Vercel AI SDK v6, Zod v4. All working but PDF snippets need adaptation.
+- **Pre-resume commands:** None needed.
+- **Last commit:** `202df29` — Phase 2: Pinecone client wrapper + smoke test passing
 
 ---
 
