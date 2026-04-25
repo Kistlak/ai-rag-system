@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "pinecone:smoke": "tsx -r dotenv/config scripts/pinecone-smoke.ts dotenv_config_path=.env.local",
-    "ingest:local": "tsx -r dotenv/config scripts/ingest-local.ts dotenv_config_path=.env.local"
+    "ingest:local": "tsx -r dotenv/config scripts/ingest-local.ts dotenv_config_path=.env.local",
+    "retrieve:test": "tsx -r dotenv/config scripts/retrieve-test.ts dotenv_config_path=.env.local"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.71",
