@@ -19,6 +19,7 @@ export async function retrieve(
       articleUrl: m.metadata.articleUrl,
       publishedAt: m.metadata.publishedAt,
       score: m.score,
+      imageUrl: typeof m.metadata.imageUrl === "string" ? m.metadata.imageUrl : undefined,
     }));
 }
 

@@ -7,6 +7,7 @@ export interface ChunkMetadata {
   publishedAt: string; // ISO 8601
   chunkIndex: number;
   text: string;
+  // imageUrl is stored as a plain string key when present (covered by the index signature)
 }
 
 export interface RetrievedChunk {
@@ -15,4 +16,5 @@ export interface RetrievedChunk {
   articleUrl: string;
   publishedAt: string;
   score: number;
+  imageUrl?: string;
 }

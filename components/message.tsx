@@ -4,10 +4,22 @@ import type { UIMessage, SourceUrlUIPart } from "ai";
 import { isTextUIPart } from "ai";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Card } from "@/components/ui/card";
 
 interface Props {
   message: UIMessage;
+}
+
+function parseSourceMeta(s: SourceUrlUIPart): { title: string; imageUrl: string | null } {
+  try {
+    const parsed = JSON.parse(s.title ?? "");
+    if (parsed && typeof parsed === "object" && "t" in parsed) {
+      return {
+        title: String(parsed.t ?? ""),
+        imageUrl: parsed.i ? String(parsed.i) : null,
+      };
+    }
+  } catch {}
+  return { title: s.title ?? s.url, imageUrl: null };
 }
 
 export default function Message({ message }: Props) {
@@ -23,7 +35,7 @@ export default function Message({ message }: Props) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl bg-slate-100 px-4 py-2 text-sm whitespace-pre-wrap">
+        <div className="max-w-[75%] rounded-2xl bg-red-600/90 px-4 py-2.5 text-sm text-white whitespace-pre-wrap">
           {text}
         </div>
       </div>
@@ -31,8 +43,9 @@ export default function Message({ message }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="max-w-[90%] rounded-2xl border bg-white px-4 py-3 text-sm leading-relaxed">
+    <div className="flex flex-col gap-3">
+      {/* ── assistant text ── */}
+      <div className="max-w-[92%] text-sm leading-relaxed text-foreground">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
@@ -42,7 +55,7 @@ export default function Message({ message }: Props) {
             li: ({ children }) => <li className="mb-0.5">{children}</li>,
             strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
             code: ({ children }) => (
-              <code className="rounded bg-slate-100 px-1 py-0.5 text-xs font-mono">{children}</code>
+              <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">{children}</code>
             ),
           }}
         >
@@ -50,27 +63,46 @@ export default function Message({ message }: Props) {
         </ReactMarkdown>
       </div>
 
+      {/* ── source cards ── */}
       {sources.length > 0 && (
-        <Card className="max-w-[90%] p-3">
+        <div className="max-w-[92%]">
           <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             Sources
           </p>
-          <ol className="flex flex-col gap-1">
-            {sources.map((s, i) => (
-              <li key={s.sourceId} className="flex items-start gap-1.5 text-xs">
-                <span className="shrink-0 text-muted-foreground">{i + 1}.</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {sources.map((s, i) => {
+              const { title, imageUrl } = parseSourceMeta(s);
+              return (
                 <a
+                  key={s.sourceId}
                   href={s.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline break-all"
+                  className="group flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card hover:border-border hover:bg-card/80 transition-all"
                 >
-                  {s.title || s.url}
+                  {imageUrl && (
+                    <div className="aspect-video overflow-hidden bg-muted shrink-0">
+                      <img
+                        src={imageUrl}
+                        alt={title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                  )}
+                  <div className="p-2.5 flex flex-col gap-1">
+                    <p className="text-xs font-medium leading-snug line-clamp-2 text-foreground">
+                      {title}
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <span className="shrink-0">{i + 1}.</span>
+                      <span className="truncate">bbc.com</span>
+                    </p>
+                  </div>
                 </a>
-              </li>
-            ))}
-          </ol>
-        </Card>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

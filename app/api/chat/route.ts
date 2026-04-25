@@ -81,7 +81,7 @@ export async function POST(req: Request) {
           type: "source-url",
           sourceId: `source-${i}`,
           url: chunk.articleUrl,
-          title: chunk.title,
+          title: JSON.stringify({ t: chunk.title, i: chunk.imageUrl ?? "" }),
         });
       });
 

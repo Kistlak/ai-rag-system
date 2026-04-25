@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { fetchAllRssItems } from "./rss";
-import { fetchArticleText } from "./article";
+import { fetchArticle } from "./article";
 import { chunkText } from "../rag/chunk";
 import { embed } from "../rag/embed";
 import { index, upsertChunks } from "../rag/pinecone";
@@ -44,21 +44,21 @@ export async function runIngest(
       continue;
     }
 
-    let text: string | null;
+    let article: Awaited<ReturnType<typeof fetchArticle>>;
     try {
-      text = await fetchArticleText(item.url);
+      article = await fetchArticle(item.url);
     } catch (err) {
       console.warn(`[ingest] fetch failed for ${item.url}:`, err);
       skipped++;
       continue;
     }
 
-    if (!text) {
+    if (!article) {
       skipped++;
       continue;
     }
 
-    const chunks = chunkText(text);
+    const chunks = chunkText(article.text);
     if (chunks.length === 0) {
       skipped++;
       continue;
@@ -68,17 +68,17 @@ export async function runIngest(
     const hash = urlHash(item.url);
 
     await upsertChunks(
-      chunks.map((chunk, i) => ({
-        id: `${hash}-${chunk.index}`,
-        values: embeddings[i],
-        metadata: {
+      chunks.map((chunk, i) => {
+        const metadata: import("../rag/types").ChunkMetadata = {
           articleUrl: item.url,
           title: item.title,
           publishedAt: item.publishedAt,
           chunkIndex: chunk.index,
           text: chunk.text,
-        },
-      }))
+        };
+        if (article!.imageUrl) metadata.imageUrl = article!.imageUrl;
+        return { id: `${hash}-${chunk.index}`, values: embeddings[i], metadata };
+      })
     );
 
     console.log(`[ingest] "${item.title}" → ${chunks.length} chunk(s) upserted`);

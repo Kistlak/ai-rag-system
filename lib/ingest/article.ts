@@ -3,7 +3,12 @@ import { load } from "cheerio";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-export async function fetchArticleText(url: string): Promise<string | null> {
+export interface ArticleResult {
+  text: string;
+  imageUrl: string | null;
+}
+
+export async function fetchArticle(url: string): Promise<ArticleResult | null> {
   const res = await fetch(url, {
     headers: { "User-Agent": USER_AGENT },
   });
@@ -20,5 +25,12 @@ export async function fetchArticleText(url: string): Promise<string | null> {
   });
 
   const text = paragraphs.join("\n\n").trim();
-  return text.length >= 200 ? text : null;
+  if (text.length < 200) return null;
+
+  const imageUrl =
+    $('meta[property="og:image"]').attr("content") ??
+    $('meta[name="og:image"]').attr("content") ??
+    null;
+
+  return { text, imageUrl };
 }
