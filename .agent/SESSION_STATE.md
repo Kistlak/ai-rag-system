@@ -7,21 +7,25 @@
 ---
 
 - **Last updated:** 2026-04-25
-- **Current phase:** Pre-Phase-1 (planning only)
-- **Current sub-step:** Plans authored; awaiting user go-ahead to start Phase 1.
+- **Current phase:** Phase 1 COMPLETE — Phase 2 (Pinecone Setup) is next
+- **Current sub-step:** N/A — Phase 1 fully done and committed
 - **Completed this session:**
-  - Read `BBC_RAG_NextJS_Build_Plan.pdf` end-to-end.
-  - Created `CLAUDE.md` with working rules (planning-first, phased-build, session-continuity protocol).
-  - Created `.agent/plans/` with 8 phase plans + `README.md` index.
-  - Created this `SESSION_STATE.md` scaffold.
-- **In-progress:** Nothing. No code written yet.
-- **Next concrete step:** Wait for user to confirm they want to start **Phase 1 — Project Bootstrap**. When they do, follow `.agent/plans/phase-1-bootstrap.md`.
+  - Scaffolded Next.js 14 (App Router, TypeScript, Tailwind CSS v4, ESLint) into repo root.
+  - Installed all core RAG deps: `ai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`, `@pinecone-database/pinecone`, `rss-parser`, `cheerio`, `zod`, `openai`.
+  - Initialized shadcn/ui (Radix/Nova preset, Tailwind v4 aware).
+  - Added shadcn components: `button`, `input`, `card`, `scroll-area`.
+  - Installed dev deps: `tsx`, `dotenv`.
+  - Created `.env.example` with all 5 required env var placeholders.
+  - Fixed `.gitignore` to allow `.env.example` while blocking `.env*.local`.
+  - Verified: `npx tsc --noEmit` passes, `npm run lint` passes, `localhost:3000` returns HTTP 200.
+- **In-progress:** Nothing.
+- **Next concrete step:** Start **Phase 2 — Pinecone Setup**. Read `.agent/plans/phase-2-pinecone.md` first. User needs to: (1) create Pinecone account, (2) create serverless index `bbc-news` (1536 dims, cosine, AWS us-east-1), (3) fill in `.env.local` with all 5 keys.
 - **Blockers / open questions:**
-  - User must have API keys ready for Anthropic, OpenAI, and Pinecone before Phase 1 finishes (or at the latest, before Phase 2 smoke test).
-  - User must create a Pinecone serverless index named `bbc-news` (1536, cosine, AWS `us-east-1`) before Phase 2.
-  - Confirm with user whether to deploy to a personal Vercel account in Phase 8.
-- **Pre-resume commands:** None yet — repo only contains planning artifacts.
-- **Last commit:** _(none yet — plans not yet committed)_
+  - User must fill in `.env.local` (copy from `.env.example`) with real keys before Phase 2 can proceed.
+  - User must create Pinecone index `bbc-news` manually in the Pinecone console.
+  - Note: Tailwind CSS v4 was installed (not v3). shadcn `components.json` uses `nova` preset. If any component styling looks off, refer to Tailwind v4 migration docs.
+- **Pre-resume commands:** `npm run dev` (to confirm dev server still works after resuming).
+- **Last commit:** `d4f4b52` — Phase 1: Next.js + TypeScript + Tailwind + shadcn/ui scaffold with RAG deps installed
 
 ---
 
