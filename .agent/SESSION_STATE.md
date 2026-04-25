@@ -7,18 +7,17 @@
 ---
 
 - **Last updated:** 2026-04-25
-- **Current phase:** Phase 5 COMPLETE — Phase 6 (Chat UI) is next
-- **Current sub-step:** N/A — Phase 5 fully done and committed
+- **Current phase:** Phase 6 COMPLETE — Phase 7 (Cron Ingestion) is next
+- **Current sub-step:** N/A — Phase 6 fully done and committed
 - **Completed this session:**
-  - Phase 5: `lib/llm.ts` (Anthropic model wrapper, `claude-sonnet-4-5`), `app/api/chat/route.ts` (POST handler). Fully verified: streaming with [Source N] citations, source-url parts, graceful fallback. Committed as `403b7ad`.
+  - Phase 6: `components/chat.tsx`, `components/message.tsx`, `app/page.tsx`, updated `app/api/chat/route.ts` to v6 UIMessage format. API streams live with source citations. Committed as `193ca10`.
 - **In-progress:** Nothing.
-- **Next concrete step:** Start **Phase 6 — Chat UI**. Read `.agent/plans/phase-6-chat-ui.md` first.
+- **Next concrete step:** Start **Phase 7 — Cron Ingestion**. Read `.agent/plans/phase-7-cron.md` first.
 - **Blockers / open questions:**
-  - **Important v6 API deviation for Phase 6:** The AI SDK v6 uses UIMessage protocol. The `useChat` hook is now from `ai/react` (same package, same import). Messages have a `parts` array — sources arrive as `source-url` parts (type `SourceUrlUIPart`), NOT as a `data` array like in v4. Phase 6 must read sources from `message.parts.filter(p => p.type === 'source-url')`, not from `data`.
-  - `react-markdown` + `remark-gfm` need to be installed (not yet in package.json).
-  - Tailwind v4 in use — no `tailwind.config.ts` file, styles via `app/globals.css` + postcss. shadcn components already added.
-- **Pre-resume commands:** `npm run dev` to verify server still starts clean.
-- **Last commit:** `403b7ad` — Phase 5: streaming chat API with RAG context + source annotations
+  - **v6 API deviations carried forward:** `useChat` from `@ai-sdk/react` v3 no longer exposes `input`/`handleInputChange`/`handleSubmit`/`isLoading`. Use `sendMessage({text})`, manage `input` with `useState`, check `status === 'streaming' || 'submitted'` for busy state. Transport configured via `new DefaultChatTransport({ api })`.
+  - Route now accepts v6 UIMessage format (`parts` array), uses `convertToModelMessages` (async) before passing to `streamText`.
+- **Pre-resume commands:** `npm run dev` to verify server starts clean.
+- **Last commit:** `193ca10` — Phase 6: Chat UI with streaming messages and source citations
 
 ---
 
