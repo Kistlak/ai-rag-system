@@ -1,7 +1,10 @@
 import {
-  streamText,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  streamText,
+  convertToModelMessages,
+  isTextUIPart,
+  type UIMessage,
 } from "ai";
 import { z } from "zod";
 import { retrieve, buildPrompt } from "@/lib/rag/retrieve";
@@ -9,14 +12,16 @@ import { getModel } from "@/lib/llm";
 
 export const maxDuration = 30;
 
-const MessageSchema = z.object({
-  role: z.enum(["user", "assistant", "system"]),
-  content: z.string(),
-});
-
 const FALLBACK =
   "I couldn't find anything in BBC coverage on that. Try rephrasing or asking about a different recent story.";
 const FALLBACK_ID = "no-context";
+
+const UIMessageSchema = z.object({
+  id: z.string().optional(),
+  role: z.enum(["user", "assistant", "system"]),
+  parts: z.array(z.any()),
+  metadata: z.unknown().optional(),
+});
 
 export async function POST(req: Request) {
   let body: unknown;
@@ -27,13 +32,13 @@ export async function POST(req: Request) {
   }
 
   const parsed = z
-    .object({ messages: z.array(MessageSchema).min(1) })
+    .object({ messages: z.array(UIMessageSchema).min(1) })
     .safeParse(body);
   if (!parsed.success) {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { messages } = parsed.data;
+  const messages = parsed.data.messages as UIMessage[];
   const lastMessage = messages[messages.length - 1];
   if (lastMessage.role !== "user") {
     return Response.json(
@@ -42,7 +47,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const chunks = await retrieve(lastMessage.content, 5);
+  const queryText = lastMessage.parts
+    .filter(isTextUIPart)
+    .map((p) => p.text)
+    .join("");
+
+  if (!queryText.trim()) {
+    return Response.json({ error: "Empty message" }, { status: 400 });
+  }
+
+  const chunks = await retrieve(queryText, 5);
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
@@ -53,15 +67,15 @@ export async function POST(req: Request) {
         return;
       }
 
-      const { system } = buildPrompt(lastMessage.content, chunks);
+      const { system } = buildPrompt(queryText, chunks);
 
+      const modelMessages = await convertToModelMessages(messages);
       const result = streamText({
         model: getModel(),
         system,
-        messages,
+        messages: modelMessages,
       });
 
-      // Write source-url parts so the UI receives them alongside the text
       chunks.forEach((chunk, i) => {
         writer.write({
           type: "source-url",
