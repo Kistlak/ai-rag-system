@@ -14,14 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BBC News Assistant",
-  description: "Ask anything about recent BBC News reporting.",
+  title: "AskBase",
+  description: "Build AI assistants grounded in your own content.",
 };
 
 export const viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fafafa" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a14" },
+    { media: "(prefers-color-scheme: light)", color: "#f8f5f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#120a09" },
   ],
 };
 

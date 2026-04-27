@@ -1,8 +1,9 @@
 import { createServerSupabaseClient, createAdminSupabaseClient } from "@/lib/db/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Bot } from "lucide-react";
 import AssistantManager from "./AssistantManager";
+import AssistantNameEditor from "./AssistantNameEditor";
 
 interface Props {
   params: Promise<{ assistantId: string }>;
@@ -26,7 +27,7 @@ export default async function AssistantDetailPage({ params }: Props) {
       .single(),
     admin
       .from("sources")
-      .select("id, url, title, status, chunk_count, ingested_at, created_at")
+      .select("id, url, title, status, chunk_count, ingested_at, created_at, error")
       .eq("assistant_id", assistantId)
       .order("created_at", { ascending: false }),
   ]);
@@ -48,20 +49,14 @@ export default async function AssistantDetailPage({ params }: Props) {
         </Link>
       </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight truncate">{assistant.name}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 font-mono">/a/{assistant.slug}</p>
+      <div className="flex items-center gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-[oklch(0.62_0.23_27)] to-[oklch(0.48_0.21_27)] shadow-md shadow-[oklch(0.58_0.22_27/0.3)]">
+          <Bot className="h-5 w-5 text-white" strokeWidth={1.75} />
         </div>
-        <button
-          type="button"
-          className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-          title="Rename (coming soon)"
-          disabled
-        >
-          <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
-          Rename
-        </button>
+        <div className="min-w-0">
+          <AssistantNameEditor assistantId={assistant.id} initialName={assistant.name} />
+          <p className="mt-0.5 font-mono text-xs text-muted-foreground">/a/{assistant.slug}</p>
+        </div>
       </div>
 
       <AssistantManager

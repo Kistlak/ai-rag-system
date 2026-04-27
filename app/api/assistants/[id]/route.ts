@@ -1,4 +1,5 @@
 import { createServerSupabaseClient, createAdminSupabaseClient } from "@/lib/db/server";
+import { deleteNamespace } from "@/lib/rag/pinecone";
 import { z } from "zod";
 
 const VALID_CHUNK_LIMITS = [10, 25, 50, 100, 200] as const;
@@ -64,9 +65,20 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   if (!assistant) return Response.json({ error: "Not found" }, { status: 404 });
 
   const admin = createAdminSupabaseClient();
-  // Sources + their Pinecone vectors are orphaned (cleanup deferred to Phase 10)
+
+  // Look up the namespace before delete so we can clean Pinecone afterwards
+  const { data: full } = await admin
+    .from("assistants")
+    .select("pinecone_namespace")
+    .eq("id", id)
+    .single();
+
   const { error } = await admin.from("assistants").delete().eq("id", id);
   if (error) return Response.json({ error: "Delete failed" }, { status: 500 });
+
+  if (full?.pinecone_namespace) {
+    await deleteNamespace(full.pinecone_namespace);
+  }
 
   return Response.json({ ok: true });
 }

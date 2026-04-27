@@ -45,4 +45,14 @@ export async function deleteChunksByUrl(url: string, namespace: string): Promise
   }
 }
 
+// Removes every vector in a namespace (used when an assistant is deleted)
+export async function deleteNamespace(namespace: string): Promise<void> {
+  if (!namespace) return;
+  try {
+    await baseIndex.namespace(namespace).deleteAll();
+  } catch {
+    // Namespace may not exist if no sources were ever indexed — safe to ignore
+  }
+}
+
 export { baseIndex as index };

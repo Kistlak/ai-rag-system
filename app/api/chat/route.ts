@@ -10,26 +10,13 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { retrieve, buildPrompt } from "@/lib/rag/retrieve";
 import { getModel } from "@/lib/llm";
-import { createAdminSupabaseClient } from "@/lib/db/server";
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/db/server";
+import { isRateLimited } from "@/lib/rate-limit";
 
 export const maxDuration = 30;
 
-const FALLBACK = "I couldn't find anything relevant on that. Try rephrasing or asking about a different topic.";
+const FALLBACK = "I couldn't find anything relevant in the indexed sources. If you just added a URL, check the dashboard to confirm it was indexed successfully — JavaScript-rendered pages (like TMDB, Netflix, etc.) can't be scraped and will show as Failed. Try rephrasing, or add a static article or blog post URL.";
 const FALLBACK_ID = "no-context";
-
-// ── In-memory rate limiter (20 req / 60s per assistant+IP) ──────────────────
-const rateLimitMap = new Map<string, number[]>();
-
-function isRateLimited(key: string): boolean {
-  const now = Date.now();
-  const WINDOW = 60_000;
-  const MAX = 20;
-  const times = (rateLimitMap.get(key) ?? []).filter((t) => now - t < WINDOW);
-  if (times.length >= MAX) return true;
-  times.push(now);
-  rateLimitMap.set(key, times);
-  return false;
-}
 
 // ── Schema ───────────────────────────────────────────────────────────────────
 const UIMessageSchema = z.object({
@@ -42,10 +29,17 @@ const UIMessageSchema = z.object({
 const BodySchema = z.object({
   messages: z.array(UIMessageSchema).min(1),
   assistantId: z.string().uuid().optional(),
+  chatId: z.string().uuid().optional(),
 });
 
+interface SourcePart {
+  type: "source-url";
+  sourceId: string;
+  url: string;
+  title: string;
+}
+
 export async function POST(req: Request) {
-  // Rate limit check
   const hdrs = await headers();
   const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
@@ -59,10 +53,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { messages, assistantId } = parsed.data;
+  const { messages, assistantId, chatId } = parsed.data;
   const rateLimitKey = `${assistantId ?? "default"}:${ip}`;
 
-  if (isRateLimited(rateLimitKey)) {
+  if (await isRateLimited(rateLimitKey)) {
     return Response.json({ error: "Too many requests" }, {
       status: 429,
       headers: { "Retry-After": "60" },
@@ -101,7 +95,68 @@ export async function POST(req: Request) {
     systemPromptOverride = assistant.system_prompt;
   }
 
-  const chunks = await retrieve(queryText, 5, namespace);
+  // ── Resolve persistence target (chatId) — only when user is signed in ─────
+  let validatedChatId: string | null = null;
+  if (chatId) {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: chat } = await supabase
+        .from("chats")
+        .select("id, title")
+        .eq("id", chatId)
+        .single();
+      if (chat) {
+        validatedChatId = chat.id;
+        // Auto-set title from first user message when missing
+        if (!chat.title) {
+          const admin = createAdminSupabaseClient();
+          await admin
+            .from("chats")
+            .update({ title: queryText.slice(0, 80) })
+            .eq("id", chat.id);
+        }
+        // Persist user message immediately
+        const admin = createAdminSupabaseClient();
+        await admin.from("chat_messages").insert({
+          chat_id: chat.id,
+          role: "user",
+          parts: lastMessage.parts,
+        });
+      }
+    }
+  }
+
+  let chunks: Awaited<ReturnType<typeof retrieve>>;
+  try {
+    chunks = await retrieve(queryText, 5, namespace);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Retrieval failed";
+    return Response.json({ error: msg }, { status: 502 });
+  }
+
+  async function persistAssistantMessage(
+    sourceParts: SourcePart[],
+    text: string,
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+  ) {
+    if (!validatedChatId) return;
+    const admin = createAdminSupabaseClient();
+    const parts = [
+      ...sourceParts,
+      { type: "text", text },
+    ];
+    await admin.from("chat_messages").insert({
+      chat_id: validatedChatId,
+      role: "assistant",
+      parts,
+      usage: usage ?? null,
+    });
+    await admin
+      .from("chats")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", validatedChatId);
+  }
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
@@ -109,25 +164,39 @@ export async function POST(req: Request) {
         writer.write({ type: "text-start", id: FALLBACK_ID });
         writer.write({ type: "text-delta", id: FALLBACK_ID, delta: FALLBACK });
         writer.write({ type: "text-end", id: FALLBACK_ID });
+        await persistAssistantMessage([], FALLBACK);
         return;
       }
 
       const { system } = buildPrompt(queryText, chunks, systemPromptOverride);
       const modelMessages = await convertToModelMessages(uiMessages);
 
-      const result = streamText({
-        model: getModel(),
-        system,
-        messages: modelMessages,
-      });
-
+      const sourceParts: SourcePart[] = [];
+      const seenUrls = new Set<string>();
       chunks.forEach((chunk, i) => {
-        writer.write({
+        if (seenUrls.has(chunk.articleUrl)) return;
+        seenUrls.add(chunk.articleUrl);
+        const part: SourcePart = {
           type: "source-url",
           sourceId: `source-${i}`,
           url: chunk.articleUrl,
           title: JSON.stringify({ t: chunk.title, i: chunk.imageUrl ?? "" }),
-        });
+        };
+        sourceParts.push(part);
+        writer.write(part);
+      });
+
+      const result = streamText({
+        model: getModel(),
+        system,
+        messages: modelMessages,
+        onFinish: async ({ text, usage }) => {
+          await persistAssistantMessage(sourceParts, text, {
+            inputTokens: usage?.inputTokens,
+            outputTokens: usage?.outputTokens,
+            totalTokens: usage?.totalTokens,
+          });
+        },
       });
 
       writer.merge(result.toUIMessageStream());
