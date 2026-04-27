@@ -16,6 +16,9 @@ This directory contains the phase-by-phase implementation plans derived from `BB
 | 6 | Chat UI | [phase-6-chat-ui.md](./phase-6-chat-ui.md) | UI streams tokens + renders citations |
 | 7 | Cron Ingestion | [phase-7-cron.md](./phase-7-cron.md) | `/api/ingest` runs hourly on Vercel, secured by bearer token |
 | 8 | Polish & Deploy | [phase-8-polish-deploy.md](./phase-8-polish-deploy.md) | Live on Vercel, all acceptance criteria met |
+| 9 | Multi-Tenant SaaS (pivot) | [phase-9-multi-tenant-saas.md](./phase-9-multi-tenant-saas.md) | Self-service: paste URL → public chatbot at `/a/<slug>` |
+
+> **Note:** Phase 9 is a product pivot. Phases 7–8 (BBC cron + BBC deploy) are **parked**. The RAG core from Phases 1–6 is reused; everything else is new.
 
 ## How to use these plans
 

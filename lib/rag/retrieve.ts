@@ -6,10 +6,11 @@ const SCORE_FLOOR = 0.2;
 
 export async function retrieve(
   query: string,
-  topK = 5
+  topK = 5,
+  namespace?: string
 ): Promise<RetrievedChunk[]> {
   const [vector] = await embed([query]);
-  const matches = await queryByVector(vector, topK);
+  const matches = await queryByVector(vector, topK, namespace);
 
   return matches
     .filter((m) => m.metadata && m.score >= SCORE_FLOOR)
@@ -25,7 +26,8 @@ export async function retrieve(
 
 export function buildPrompt(
   question: string,
-  chunks: RetrievedChunk[]
+  chunks: RetrievedChunk[],
+  systemPromptOverride?: string | null
 ): { system: string } {
   const context = chunks
     .map(
@@ -34,7 +36,9 @@ export function buildPrompt(
     )
     .join("\n\n");
 
-  const system = `You are a helpful assistant answering questions using only the BBC News articles provided below.
+  const system =
+    systemPromptOverride ??
+    `You are a helpful assistant answering questions using only the articles provided below.
 - Cite sources inline as [Source N] where N matches the numbering in the context.
 - If the answer is not in the context, say so honestly. Do not invent facts.
 - Keep answers concise and factual. Quote sparingly.
