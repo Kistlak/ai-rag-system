@@ -20,8 +20,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Message from "./message";
 
-const transport = new DefaultChatTransport({ api: "/api/chat" });
-
 const SUGGESTED_PROMPTS = [
   {
     icon: Cpu,
@@ -91,7 +89,18 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-export default function Chat() {
+interface ChatProps {
+  assistantId?: string;
+}
+
+export default function Chat({ assistantId }: ChatProps = {}) {
+  const transport = useMemo(
+    () => new DefaultChatTransport({
+      api: "/api/chat",
+      ...(assistantId ? { body: { assistantId } } : {}),
+    }),
+    [assistantId]
+  );
   const { messages, sendMessage, status } = useChat({ transport });
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);

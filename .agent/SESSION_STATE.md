@@ -1,4 +1,4 @@
-# Session State — BBC News RAG System
+# Session State — Multi-Tenant SaaS RAG Platform
 
 > Always-current snapshot of "where we are right now."
 > Read this first when the user types `continue`. Update it before stopping or running out of context.
@@ -6,18 +6,37 @@
 
 ---
 
-- **Last updated:** 2026-04-25
-- **Current phase:** Phase 6 COMPLETE — Phase 7 (Cron Ingestion) is next
-- **Current sub-step:** N/A — Phase 6 fully done and committed
+- **Last updated:** 2026-04-27
+- **Current phase:** Phase 9 COMPLETE (9.1–9.7 all done, not committed per user instruction)
+- **Current sub-step:** N/A
 - **Completed this session:**
-  - Phase 6: `components/chat.tsx`, `components/message.tsx`, `app/page.tsx`, updated `app/api/chat/route.ts` to v6 UIMessage format. API streams live with source citations. Committed as `193ca10`.
+  - LLM provider toggle (`lib/llm.ts`)
+  - App review + product pivot (BBC-only → multi-tenant SaaS)
+  - Phase 9 plan written
+  - **9.1** Supabase schema (`supabase/schema.sql`), `lib/db/client.ts`, `lib/db/server.ts`
+  - **9.2** Auth flow: `app/(auth)/sign-in/page.tsx`, `app/auth/callback/route.ts`, `proxy.ts`
+  - **9.3** Generic article extractor (Readability primary, BBC cheerio fallback), `scripts/test-extractor.ts`
+  - **9.4** Namespace-aware Pinecone (`lib/rag/pinecone.ts`), `lib/ingest/pipeline-url.ts`, `app/api/sources/route.ts`
+  - **9.5** Dashboard UI: layout, sign-out, `AssistantGrid`, assistant detail with `AssistantManager`; `app/api/assistants/route.ts`, `app/api/assistants/[id]/route.ts`, `app/api/sources/[id]/route.ts`, `lib/slug.ts`
+  - **9.6** Public chat route `app/a/[slug]/page.tsx`; Chat component accepts `assistantId` prop
+  - **9.7** In-memory rate limiter in `app/api/chat/route.ts` (20 req/60s per assistantId+IP); updated route to resolve namespace + system prompt from DB
+  - Build: **clean** — all 12 routes compile, TypeScript passes
 - **In-progress:** Nothing.
-- **Next concrete step:** Start **Phase 7 — Cron Ingestion**. Read `.agent/plans/phase-7-cron.md` first.
+- **Next concrete step:** User tests the full flow locally (`npm run dev`):
+  1. Visit `/sign-in` → magic link → `/dashboard`
+  2. Create an assistant
+  3. Add a URL (ingest)
+  4. Visit the public `/a/<slug>` chat and ask a question
+  5. Verify answer is grounded in the ingested URL
 - **Blockers / open questions:**
-  - **v6 API deviations carried forward:** `useChat` from `@ai-sdk/react` v3 no longer exposes `input`/`handleInputChange`/`handleSubmit`/`isLoading`. Use `sendMessage({text})`, manage `input` with `useState`, check `status === 'streaming' || 'submitted'` for busy state. Transport configured via `new DefaultChatTransport({ api })`.
-  - Route now accepts v6 UIMessage format (`parts` array), uses `convertToModelMessages` (async) before passing to `streamText`.
-- **Pre-resume commands:** `npm run dev` to verify server starts clean.
-- **Last commit:** `193ca10` — Phase 6: Chat UI with streaming messages and source citations
+  - Supabase Auth redirect URL must include `http://localhost:3000/auth/callback` — confirm in dashboard
+  - `NEXT_PUBLIC_APP_URL` not set in `.env.local` (defaults to `http://localhost:3000` in assistant detail page)
+  - Phases 7–8 (BBC cron + deploy) still PARKED
+  - Rename feature on assistant detail page is disabled (deferred to Phase 10)
+  - Pinecone cleanup on assistant delete is deferred (orphaned vectors stay — Phase 10)
+- **Pre-resume commands:** `npm run dev`
+- **Locked decisions:** See phase-9 plan for Q1–Q5
+- **Last commit:** `30343a9` — updated UI (no commits made this session per user instruction)
 
 ---
 
