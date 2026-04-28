@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>AskBase - Project Walkthrough</title>
+<!--[if gte mso 9]>
+<xml>
+  <w:WordDocument>
+    <w:View>Print</w:View>
+    <w:Zoom>100</w:Zoom>
+    <w:DoNotOptimizeForBrowser/>
+  </w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+  @page { size: A4; margin: 2cm; }
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.45; color: #222; }
+  h1 { font-size: 26pt; color: #b3261e; margin-top: 0; margin-bottom: 4pt; }
+  h2 { font-size: 17pt; color: #1a4d8c; margin-top: 22pt; margin-bottom: 8pt; border-bottom: 1pt solid #cfd8e3; padding-bottom: 4pt; }
+  h3 { font-size: 13pt; color: #2a6cb0; margin-top: 14pt; margin-bottom: 4pt; }
+  h4 { font-size: 12pt; color: #444; margin-top: 10pt; margin-bottom: 3pt; }
+  p  { margin: 6pt 0; }
+  ul, ol { margin: 4pt 0 8pt 22pt; }
+  li { margin: 2pt 0; }
+  code { font-family: Consolas, "Courier New", monospace; background: #f3f4f6; padding: 1pt 4pt; font-size: 10pt; color: #b3261e; }
+  pre  { font-family: Consolas, "Courier New", monospace; background: #f3f4f6; padding: 8pt; border: 1pt solid #d8dde3; font-size: 10pt; white-space: pre-wrap; color: #222; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; }
+  th, td { border: 1pt solid #b8c1cc; padding: 5pt 7pt; text-align: left; vertical-align: top; font-size: 10.5pt; }
+  th { background: #e8eef7; color: #1a4d8c; }
+  blockquote { border-left: 3pt solid #1a4d8c; padding: 4pt 12pt; color: #555; margin: 10pt 0; background: #f5f8fc; }
+  .subtitle { font-size: 13pt; color: #555; margin-top: 0; }
+  .meta { color: #888; font-size: 10pt; }
+  .callout { border: 1pt solid #f0c674; background: #fff8e6; padding: 8pt 12pt; margin: 10pt 0; }
+  .toc li { margin: 3pt 0; }
+</style>
+</head>
+<body>
+
+<h1>AskBase</h1>
+<p class="subtitle">Build AI assistants grounded in your own content.</p>
+<p class="meta">A beginner-friendly walkthrough of the whole project &mdash; what was built, why, and how.</p>
+
+<hr>
+
+<h2>Table of contents</h2>
+<ol class="toc">
+  <li>What is AskBase, in plain English</li>
+  <li>The big picture: how all the pieces fit together</li>
+  <li>The tech stack and why each piece was chosen</li>
+  <li>The frontend (Next.js, App Router, React)</li>
+  <li>Authentication (Supabase Auth, magic links)</li>
+  <li>The database (Supabase Postgres + RLS)</li>
+  <li>"ORM": how the code talks to the database</li>
+  <li>Storage: what is stored where</li>
+  <li>The AI pipeline (RAG explained)</li>
+  <li>The AI models used</li>
+  <li>"AI agents": what an assistant is in this app</li>
+  <li>Types and interfaces (the TypeScript layer)</li>
+  <li>OOP and coding principles actually used</li>
+  <li>Multi-tenancy: keeping users isolated</li>
+  <li>Rate limiting</li>
+  <li>Article extraction</li>
+  <li>Tips for someone new to Next.js</li>
+  <li>Glossary</li>
+</ol>
+
+<hr>
+
+<h2>1. What is AskBase, in plain English</h2>
+
+<p>AskBase is a website where anyone can build their own little AI chatbot. The user signs in with their email, pastes a few web links (a docs site, a blog, a Wikipedia article, anything text-heavy), and AskBase produces a public chat link they can share. Visitors who open that link can ask questions and get answers grounded only in those pages, with citations back to the original URLs.</p>
+
+<p>Think of it as "ChatGPT, but it only knows what you taught it, and it always shows its sources."</p>
+
+<p>The product solves a real problem: large language models like Claude or GPT know a lot of general stuff, but they make things up about specific topics, and their knowledge has a cut-off date. AskBase fixes that by attaching a private knowledge base to the chatbot so it answers from real, retrievable documents.</p>
+
+<p>The technical name for this technique is <strong>RAG &mdash; Retrieval-Augmented Generation</strong>. The "retrieval" part is finding the right snippets of text. The "augmented generation" part is feeding those snippets to the model along with the question, so the answer is grounded in real content.</p>
+
+<h2>2. The big picture: how all the pieces fit together</h2>
+
+<p>It helps to understand the app as two flows, not as one big monolith.</p>
+
+<h3>Flow A &mdash; The owner builds a chatbot</h3>
+<ol>
+  <li>Owner signs in with a magic link on <code>/sign-in</code>.</li>
+  <li>Owner is redirected to <code>/dashboard</code>, which lists their assistants.</li>
+  <li>Owner clicks "Create assistant", gives it a name. The app saves a row in the database and reserves a unique URL slug like <code>/a/my-bot-x9k3</code>.</li>
+  <li>On the assistant detail page, the owner pastes a URL. The server fetches the page, pulls out the readable text, splits it into chunks, turns each chunk into a numeric vector (an "embedding"), and stores them in Pinecone under a namespace dedicated to this assistant.</li>
+  <li>The status flips from <em>processing</em> to <em>ready</em>. The owner repeats for more URLs.</li>
+  <li>The owner copies the share link.</li>
+</ol>
+
+<h3>Flow B &mdash; A visitor chats with the bot</h3>
+<ol>
+  <li>Visitor opens <code>/a/my-bot-x9k3</code> &mdash; no sign-in required.</li>
+  <li>Visitor types a question.</li>
+  <li>The server turns the question into a vector and asks Pinecone "give me the 5 most similar chunks <em>within this assistant's namespace</em>."</li>
+  <li>Those 5 chunks are stuffed into a prompt along with instructions like "answer using only these passages, cite them by number."</li>
+  <li>The prompt is sent to Claude (or OpenAI), and the answer streams back token-by-token.</li>
+  <li>The chat UI shows source cards above the answer with the URLs it used.</li>
+</ol>
+
+<p>Everything else &mdash; the auth system, the dashboard, the rate limiter, the usage page &mdash; exists to support those two flows.</p>
+
+<h2>3. The tech stack and why each piece was chosen</h2>
+
+<table>
+  <tr><th>Concern</th><th>Choice</th><th>Why this one</th></tr>
+  <tr><td>Web framework</td><td>Next.js 16 (App Router)</td><td>Server and client code in one project, file-based routing, easy deploy on Vercel.</td></tr>
+  <tr><td>Language</td><td>TypeScript (strict)</td><td>Catches mistakes before runtime; gives autocomplete; the whole codebase is typed.</td></tr>
+  <tr><td>UI styling</td><td>Tailwind CSS v4 + shadcn/ui</td><td>Utility classes are fast to write; shadcn gives copy-pasteable accessible components.</td></tr>
+  <tr><td>Streaming chat</td><td>Vercel AI SDK v6</td><td>Handles streaming tokens, message parts, tool calls; works with multiple providers behind one API.</td></tr>
+  <tr><td>LLM</td><td>Claude Sonnet 4.6 (or OpenAI GPT-4o)</td><td>Strong reasoning, good with citations. Toggleable via env var.</td></tr>
+  <tr><td>Embeddings</td><td>OpenAI text-embedding-3-small</td><td>1,536 dimensions, fast, cheap, good quality for English text.</td></tr>
+  <tr><td>Vector database</td><td>Pinecone serverless</td><td>Managed, scales to millions of vectors, supports namespaces (one per tenant).</td></tr>
+  <tr><td>Auth + relational DB</td><td>Supabase</td><td>Magic-link auth and Postgres in one project; Row-Level Security for tenant isolation.</td></tr>
+  <tr><td>Article extraction</td><td>Mozilla Readability + jsdom</td><td>Same engine Firefox uses for Reader Mode; pulls clean article text out of any HTML.</td></tr>
+  <tr><td>JS-rendered pages</td><td>Cloudflare Browser Rendering (optional)</td><td>For sites that need JavaScript to load content; falls back gracefully if not configured.</td></tr>
+  <tr><td>Rate limiting</td><td>Upstash Redis (or in-memory fallback)</td><td>Stops abuse on the public chat endpoint without standing up a queue.</td></tr>
+  <tr><td>Theming</td><td>next-themes</td><td>Dark mode default, respects system preference, no flash on reload.</td></tr>
+</table>
+
+<h2>4. The frontend (Next.js, App Router, React)</h2>
+
+<p>If you have only ever used React with Create React App or Vite, the App Router is going to feel different. Here are the most important things to know:</p>
+
+<h3>Pages live in folders</h3>
+<p>Inside the <code>app/</code> directory, every folder that contains a <code>page.tsx</code> file becomes a route. So:</p>
+<ul>
+  <li><code>app/page.tsx</code> &rarr; <code>/</code> (the home page, currently shows the legacy BBC chat)</li>
+  <li><code>app/dashboard/page.tsx</code> &rarr; <code>/dashboard</code></li>
+  <li><code>app/a/[slug]/page.tsx</code> &rarr; <code>/a/anything-here</code> (dynamic segment in brackets)</li>
+  <li><code>app/dashboard/[assistantId]/page.tsx</code> &rarr; <code>/dashboard/&lt;some-uuid&gt;</code></li>
+</ul>
+
+<p>The <code>(auth)</code> folder is special &mdash; the parentheses mean "group these without adding to the URL." So <code>app/(auth)/sign-in/page.tsx</code> still becomes <code>/sign-in</code>, not <code>/(auth)/sign-in</code>.</p>
+
+<h3>Server components by default</h3>
+<p>Every component is rendered on the server unless it has <code>'use client'</code> at the top. That changes how you write code:</p>
+<ul>
+  <li>Server components can read the database directly (no need for an API call) &mdash; see <code>app/dashboard/page.tsx</code>.</li>
+  <li>Server components can't use <code>useState</code>, <code>useEffect</code>, browser APIs, or event handlers.</li>
+  <li>Anything interactive (buttons that do things, forms with state) goes in a separate file marked <code>'use client'</code> &mdash; see <code>app/dashboard/AssistantGrid.tsx</code>.</li>
+</ul>
+
+<h3>API routes are folders with <code>route.ts</code></h3>
+<p>Instead of putting API logic in <code>pages/api/</code> like older Next.js, you create a folder under <code>app/api/</code> and drop a <code>route.ts</code> file. Each function exported from that file (<code>GET</code>, <code>POST</code>, <code>PATCH</code>, <code>DELETE</code>) becomes that HTTP method for that route.</p>
+
+<p>Example, in <code>app/api/sources/route.ts</code>:</p>
+<pre>export async function POST(req: Request) {
+  // handles POST /api/sources
+}</pre>
+
+<h3>Layouts wrap pages</h3>
+<p>A <code>layout.tsx</code> in any folder wraps every page in that folder and below. The dashboard layout (<code>app/dashboard/layout.tsx</code>) adds the header and sidebar; you don't repeat that on every dashboard page.</p>
+
+<h3>The "proxy" file is the middleware</h3>
+<p>This project's middleware is in <code>proxy.ts</code> at the root. It runs before every request that matches its <code>matcher</code> config. Here it does two things:</p>
+<ul>
+  <li>Refreshes the Supabase auth session cookie.</li>
+  <li>Redirects unauthenticated users away from <code>/dashboard</code> to <code>/sign-in</code>, and signed-in users away from <code>/sign-in</code> to <code>/dashboard</code>.</li>
+</ul>
+
+<h2>5. Authentication (Supabase Auth, magic links)</h2>
+
+<p>"Authentication" just means: how does the app know who you are. AskBase uses Supabase Auth with the simplest method available &mdash; <strong>magic links</strong>.</p>
+
+<h3>How a magic link works</h3>
+<ol>
+  <li>User types their email on <code>/sign-in</code> and submits.</li>
+  <li>The browser calls <code>supabase.auth.signInWithOtp({ email })</code>.</li>
+  <li>Supabase sends an email with a link that contains a one-time code.</li>
+  <li>User clicks the link, which opens <code>/auth/callback?code=&lt;something&gt;</code> on our server.</li>
+  <li>Our callback route exchanges the code for a session and sets a secure cookie.</li>
+  <li>User is redirected to <code>/dashboard</code>, fully signed in.</li>
+</ol>
+
+<p>No passwords are stored on our side. Supabase handles the email sending, the code generation, and the session.</p>
+
+<h3>Three different Supabase clients</h3>
+<p>This trips up beginners, so it is worth being explicit. The codebase uses three separate clients depending on where the code runs:</p>
+
+<table>
+  <tr><th>File</th><th>Used in</th><th>Has admin powers?</th></tr>
+  <tr><td><code>lib/db/client.ts</code></td><td>Browser ("use client" components)</td><td>No &mdash; respects RLS</td></tr>
+  <tr><td><code>lib/db/server.ts</code> &rarr; <code>createServerSupabaseClient</code></td><td>Server components, route handlers</td><td>No &mdash; respects RLS, reads session from cookie</td></tr>
+  <tr><td><code>lib/db/server.ts</code> &rarr; <code>createAdminSupabaseClient</code></td><td>Server only, route handlers</td><td>Yes &mdash; bypasses RLS</td></tr>
+</table>
+
+<p>The admin client uses <code>SUPABASE_SECRET_KEY</code>. That key has no <code>NEXT_PUBLIC_</code> prefix, which means Next will refuse to ship it to the browser. That convention is the security boundary &mdash; if it is ever bundled into a client component, the import will fail at build time.</p>
+
+<h2>6. The database (Supabase Postgres + RLS)</h2>
+
+<p>The database is just plain Postgres, hosted by Supabase. The schema lives in <code>supabase/schema.sql</code> and the chat-history extension in <code>supabase/2026-04-28-chats.sql</code>.</p>
+
+<h3>The five tables</h3>
+
+<table>
+  <tr><th>Table</th><th>Purpose</th></tr>
+  <tr><td><code>profiles</code></td><td>One row per signed-up user. Auto-created by a trigger when someone signs up.</td></tr>
+  <tr><td><code>assistants</code></td><td>One row per chatbot. Stores name, slug, system prompt, namespace, public/private flag.</td></tr>
+  <tr><td><code>sources</code></td><td>One row per URL added to an assistant. Tracks status (pending/processing/ready/failed) and chunk count.</td></tr>
+  <tr><td><code>chats</code></td><td>One conversation thread, owned by a signed-in visitor.</td></tr>
+  <tr><td><code>chat_messages</code></td><td>Individual user/assistant messages within a chat, including token usage.</td></tr>
+</table>
+
+<h3>Row-Level Security (RLS) &mdash; the safety net</h3>
+<p>RLS is a Postgres feature where every read and write goes through a policy you define in SQL. Even if a developer makes a mistake in JavaScript, the database itself refuses to return data the user is not allowed to see.</p>
+
+<p>For example, the policy on the <code>assistants</code> table is:</p>
+<pre>create policy "owners full access to their assistants"
+  on public.assistants for all
+  using (auth.uid() = owner_id)
+  with check (auth.uid() = owner_id);
+
+create policy "public read for public assistants"
+  on public.assistants for select
+  using (is_public = true);</pre>
+
+<p>That policy says "you can do anything to assistants you own; anyone can read assistants that are public." Combined with the auto-injected <code>auth.uid()</code> from the JWT in the cookie, this enforces tenant isolation at the database layer, not just in app code.</p>
+
+<h3>Why also use the admin client?</h3>
+<p>The public chat route (<code>/a/&lt;slug&gt;</code>) needs to look up an assistant and run retrieval, but the visitor is not signed in. Rather than expose all assistants publicly through RLS, the server uses the admin client and explicitly checks <code>is_public = true</code> in the query. That keeps the policy tight and the code intent obvious.</p>
+
+<h2>7. "ORM": how the code talks to the database</h2>
+
+<p>If you are coming from Java/C# or Django/Rails, you are probably looking for an ORM (Object-Relational Mapper) like Hibernate, Entity Framework, ActiveRecord, or Prisma. AskBase does not use one.</p>
+
+<p>It uses the <strong>Supabase JavaScript client</strong>, which is a thin wrapper over their auto-generated REST API. The code looks like this:</p>
+
+<pre>const { data: assistants } = await admin
+  .from("assistants")
+  .select("id, name, slug, description")
+  .eq("owner_id", user.id)
+  .order("created_at", { ascending: false });</pre>
+
+<p>That is closer to a query builder than an ORM:</p>
+<ul>
+  <li>You name the table as a string.</li>
+  <li>You list the columns you want as a string.</li>
+  <li>It returns plain JavaScript objects, not class instances.</li>
+  <li>There is no schema-to-types generator wired up here, so the types you see come from manual <code>interface</code> declarations.</li>
+</ul>
+
+<p>The advantage: zero migration tooling, zero code generation, and the same client works in the browser, server components, and route handlers (with different auth contexts). The disadvantage: if you rename a column, TypeScript will not catch it &mdash; you find out at runtime.</p>
+
+<p>For a project this size that trade-off is fine. If it grew, swapping to Prisma or to Supabase's generated types would be a small refactor.</p>
+
+<h2>8. Storage: what is stored where</h2>
+
+<p>The app uses three different storage systems for three different kinds of data. Knowing which one holds what makes the code much easier to follow.</p>
+
+<table>
+  <tr><th>Storage</th><th>What lives there</th></tr>
+  <tr><td>Supabase Postgres</td><td>Users, assistants (metadata only), sources (URLs and status, not the article text), chat history.</td></tr>
+  <tr><td>Pinecone</td><td>The actual article chunks (as text inside vector metadata) plus their numeric embeddings.</td></tr>
+  <tr><td>Cookies (browser)</td><td>The Supabase session token. Set by the auth callback, read on every request by the server.</td></tr>
+</table>
+
+<p>Notice the article text itself is stored only in Pinecone, not in Postgres. That keeps Postgres small and lets retrieval and storage live together. If you ever need to re-render the original article, you would re-fetch it from the URL.</p>
+
+<p>Supabase Storage (their S3-style file bucket) is <em>available</em> in the project but not currently used. It would be the place to put assistant logos or uploaded PDFs in a future phase.</p>
+
+<h2>9. The AI pipeline (RAG explained)</h2>
+
+<p>This is the heart of the app. There are five steps. They live in <code>lib/ingest/</code> and <code>lib/rag/</code>.</p>
+
+<h3>Step 1: Fetch the page</h3>
+<p>File: <code>lib/ingest/article.ts</code>.</p>
+<p>The server makes an HTTP request to the URL with a realistic browser User-Agent. If the site returns HTML, great. If the site is a JavaScript SPA (single-page app) and returns a near-empty shell, AskBase optionally falls back to Cloudflare's Browser Rendering API, which actually runs the page in a real Chromium instance and returns the rendered markdown.</p>
+
+<h3>Step 2: Extract the readable text</h3>
+<p>Same file. The HTML is fed into <code>@mozilla/readability</code> &mdash; the same library Firefox uses for Reader Mode. It strips out nav bars, ads, sidebars, comment sections, and returns the article body. If Readability fails (some sites have weird markup), the code has a Cheerio-based fallback specifically for BBC News, left over from the original product.</p>
+
+<h3>Step 3: Chunk the text</h3>
+<p>File: <code>lib/rag/chunk.ts</code>.</p>
+<p>You cannot send a 10,000-word article to an LLM as one blob. You also cannot embed the whole article as one vector &mdash; the meaning gets blurred. So the text is split into chunks of roughly 600 tokens each (about 450 words), with an 80-token overlap between consecutive chunks so context isn't lost at the boundaries. The chunker tries to break on paragraph boundaries to keep ideas intact.</p>
+
+<h3>Step 4: Embed each chunk</h3>
+<p>File: <code>lib/rag/embed.ts</code>.</p>
+<p>"Embedding" is the act of converting text into a list of numbers (a "vector") such that texts with similar meaning end up close together in number-space. AskBase uses OpenAI's <code>text-embedding-3-small</code> model, which produces 1,536-dimensional vectors. Each chunk becomes one such vector.</p>
+
+<h3>Step 5: Store in Pinecone, then retrieve later</h3>
+<p>File: <code>lib/rag/pinecone.ts</code> and <code>lib/rag/retrieve.ts</code>.</p>
+<p>All the vectors for one assistant go into a Pinecone <em>namespace</em> identified by that assistant's UUID. Querying within a namespace is the only way to retrieve, so cross-tenant leakage is impossible at the storage layer.</p>
+
+<p>When a visitor asks a question:</p>
+<ol>
+  <li>The question is embedded the same way (same model, same dimensionality).</li>
+  <li>Pinecone is asked: "in this namespace, return the top 5 chunks closest to this vector."</li>
+  <li>Anything below a similarity score of 0.2 is dropped to avoid bringing in unrelated junk.</li>
+  <li>The remaining chunks are formatted into a prompt:
+<pre>You are a helpful assistant answering questions using
+only the articles provided below.
+- Cite sources inline as [Source N].
+- If the answer is not in the context, say so honestly.
+
+Context:
+[Source 1] Title (URL) - published date
+&lt;chunk text&gt;
+
+[Source 2] ...</pre></li>
+  <li>That prompt is sent to Claude (or OpenAI) using the Vercel AI SDK, which streams the response back to the browser as it arrives.</li>
+</ol>
+
+<h2>10. The AI models used</h2>
+
+<table>
+  <tr><th>Job</th><th>Model</th><th>Provider</th></tr>
+  <tr><td>Embedding text into vectors</td><td>text-embedding-3-small</td><td>OpenAI (always &mdash; required)</td></tr>
+  <tr><td>Generating chat answers</td><td>claude-sonnet-4-6 (default)</td><td>Anthropic</td></tr>
+  <tr><td>Generating chat answers (alt)</td><td>gpt-4o</td><td>OpenAI &mdash; activated by setting <code>LLM_PROVIDER=openai</code></td></tr>
+  <tr><td>Browser rendering for SPAs</td><td>Cloudflare Browser Rendering</td><td>Cloudflare (optional)</td></tr>
+</table>
+
+<p>The provider toggle lives in <code>lib/llm.ts</code> &mdash; it is 20 lines of code that read an env var and return the right model adapter. The rest of the chat code does not know or care which provider it is using.</p>
+
+<h2>11. "AI agents": what an assistant is in this app</h2>
+
+<p>"AI agent" is a loaded term in the industry. Sometimes it means a model that calls tools and loops autonomously. AskBase uses the word more modestly: an <em>assistant</em> here is a configured chatbot &mdash; a name, a system prompt, a knowledge base, a public URL.</p>
+
+<p>An assistant is fully described by one row in the <code>assistants</code> table:</p>
+
+<table>
+  <tr><th>Column</th><th>What it controls</th></tr>
+  <tr><td><code>name</code></td><td>What the chatbot calls itself.</td></tr>
+  <tr><td><code>slug</code></td><td>The public URL piece.</td></tr>
+  <tr><td><code>description</code></td><td>One-liner shown on the chat page.</td></tr>
+  <tr><td><code>system_prompt</code></td><td>Override the default RAG prompt with custom instructions. Optional.</td></tr>
+  <tr><td><code>pinecone_namespace</code></td><td>Which slice of vector storage belongs to this assistant.</td></tr>
+  <tr><td><code>llm_provider</code></td><td>Reserved column for per-assistant model choice (not yet exposed in UI).</td></tr>
+  <tr><td><code>is_public</code></td><td>If false, the assistant is hidden from <code>/a/&lt;slug&gt;</code>.</td></tr>
+  <tr><td><code>max_chunks_per_source</code></td><td>Cap on chunks-per-URL during ingest (10/25/50/100/200).</td></tr>
+</table>
+
+<p>There is no autonomous loop, no tool use, no multi-step planning. It is a "retrieve then answer" agent &mdash; the simplest useful kind. Adding tool use later would mean wiring the AI SDK's tool API into <code>app/api/chat/route.ts</code>.</p>
+
+<h2>12. Types and interfaces (the TypeScript layer)</h2>
+
+<p>The whole codebase is in TypeScript with strict mode on. The CLAUDE.md project rules even say "no <code>any</code> in business logic". A few representative examples:</p>
+
+<h3>Describing a chunk of an article</h3>
+<pre>// lib/rag/types.ts
+export interface ChunkMetadata {
+  articleUrl: string;
+  title: string;
+  publishedAt: string;
+  chunkIndex: number;
+  text: string;
+}
+
+export interface RetrievedChunk {
+  text: string;
+  title: string;
+  articleUrl: string;
+  publishedAt: string;
+  score: number;
+  imageUrl?: string;
+}</pre>
+
+<p><code>interface</code> defines the shape of an object. The <code>?</code> makes a field optional. <code>string</code>, <code>number</code> are the primitives. There are also union types like <code>"pending" | "processing" | "ready" | "failed"</code> &mdash; that is how the source-status column gets typed.</p>
+
+<h3>Validating data coming in</h3>
+<p>For data that crosses the network boundary &mdash; like the body of a POST request &mdash; the code uses <code>zod</code>:</p>
+<pre>// app/api/sources/route.ts
+const BodySchema = z.object({
+  assistantId: z.string().uuid(),
+  url: z.string().url(),
+});
+
+const parsed = BodySchema.safeParse(body);
+if (!parsed.success) {
+  return Response.json({ error: "Invalid body" }, { status: 400 });
+}</pre>
+
+<p>This pairs with TypeScript: zod checks the shape at runtime, and TypeScript can infer a static type from the same schema. One source of truth, two layers of safety.</p>
+
+<h2>13. OOP and coding principles actually used</h2>
+
+<p>If you are expecting heavy class hierarchies and design patterns, this codebase will surprise you. It is mostly:</p>
+
+<ul>
+  <li><strong>Pure functions</strong>. <code>chunkText()</code>, <code>embed()</code>, <code>retrieve()</code>, <code>buildPrompt()</code> &mdash; each takes inputs, returns outputs, no shared state.</li>
+  <li><strong>Module-level singletons</strong> for clients that need configuration. Pinecone and Supabase clients are created once per file and reused.</li>
+  <li><strong>Interfaces, not classes</strong>. TypeScript <code>interface</code> defines shapes, but the data flowing through is plain JavaScript objects.</li>
+  <li><strong>Composition over inheritance</strong>. The chat UI is a parent component that receives data through props; smaller pieces (Message, Sidebar) are rendered inside it.</li>
+</ul>
+
+<p>That said, you will recognise common principles:</p>
+
+<table>
+  <tr><th>Principle</th><th>Where it shows up</th></tr>
+  <tr><td>Single Responsibility</td><td>Each file in <code>lib/rag/</code> does one thing: chunk, embed, store, retrieve. Easy to test, easy to swap.</td></tr>
+  <tr><td>Separation of concerns</td><td>The UI does not know anything about Pinecone. The chat route does not know anything about HTML extraction. Each layer talks to the next via small, typed contracts.</td></tr>
+  <tr><td>Dependency injection (lite)</td><td>The article extractor takes a URL and returns a result; it does not reach into the database. The DB writes are done by the caller.</td></tr>
+  <tr><td>Fail fast</td><td>Zod schemas reject bad input at the door; missing env vars throw on startup; retrieval below a similarity threshold returns "no relevant coverage" instead of guessing.</td></tr>
+  <tr><td>YAGNI ("you aren't gonna need it")</td><td>The CLAUDE.md rules explicitly forbid adding "future-proofing" abstractions the spec doesn't ask for. Most files are short because of this.</td></tr>
+</table>
+
+<p>The trade-off is that the code is procedural, not OOP. If you want to add classes, you can &mdash; nothing stops you &mdash; but you will be going against the grain of the existing codebase.</p>
+
+<h2>14. Multi-tenancy: keeping users isolated</h2>
+
+<p>"Multi-tenancy" means many separate customers share one running instance of the app, but cannot see each other's data. AskBase enforces it at three independent layers, so a bug in one does not blow the whole thing open.</p>
+
+<ol>
+  <li><strong>Postgres RLS</strong>. Every query made with the regular Supabase client gets <code>auth.uid() = owner_id</code> appended automatically by the database. Even if the JavaScript code is wrong, the DB will not hand over another user's rows.</li>
+  <li><strong>Pinecone namespaces</strong>. Every assistant has its own UUID namespace. Retrieval is always called with that namespace, so a query inside Assistant A literally cannot match vectors inside Assistant B.</li>
+  <li><strong>The secret-key boundary</strong>. The admin Supabase client (which bypasses RLS) is only created in server files. The env var that powers it (<code>SUPABASE_SECRET_KEY</code>) has no <code>NEXT_PUBLIC_</code> prefix, so Next.js refuses to bundle it into client code. If a developer accidentally imports the admin client into a client component, the build breaks.</li>
+</ol>
+
+<p>That belt-and-suspenders approach is the most important security property of the whole app.</p>
+
+<h2>15. Rate limiting</h2>
+
+<p>The public chat endpoint is the most attackable surface in the app: anyone with the URL can hit it. <code>lib/rate-limit.ts</code> limits each <code>(assistantId, IP)</code> pair to <strong>20 requests per 60 seconds</strong>.</p>
+
+<p>If <code>UPSTASH_REDIS_REST_URL</code> and <code>UPSTASH_REDIS_REST_TOKEN</code> are set, the limiter uses Upstash's distributed sliding-window algorithm &mdash; safe across multiple serverless instances. If those env vars are missing, it falls back to an in-memory map (works locally, not safe across server instances). When the limit is hit the route returns <code>HTTP 429</code> with a <code>Retry-After: 60</code> header so well-behaved clients back off.</p>
+
+<h2>16. Article extraction</h2>
+
+<p>This is the hardest part of the system to get right because the open web is messy. The flow in <code>lib/ingest/article.ts</code> is:</p>
+
+<ol>
+  <li><strong>Plain fetch</strong>. Pretend to be a browser, request the URL, follow redirects, time out at 15 seconds.</li>
+  <li><strong>Run Readability</strong>. Feed the HTML into jsdom + Mozilla Readability. If it returns at least 200 characters of text, that is the article body.</li>
+  <li><strong>BBC fallback</strong>. If Readability comes up short and the page is BBC News, look for <code>[data-component='text-block'] p</code> elements directly with Cheerio. (Legacy code from when this was BBC-only.)</li>
+  <li><strong>Cloudflare fallback</strong>. If still no luck and Cloudflare credentials are configured, send the URL to Cloudflare's Browser Rendering <code>/markdown</code> endpoint, which renders the page in real Chromium and returns markdown.</li>
+  <li><strong>Helpful error messages</strong>. If everything fails, the user sees a specific, actionable error: "this site blocks scrapers", "this is a JavaScript SPA, configure Cloudflare", "rate-limited, try again later" &mdash; not a generic "ingest failed".</li>
+</ol>
+
+<p>The image, title, and publication metadata are pulled from <code>&lt;meta property="og:..."&gt;</code> tags via Cheerio.</p>
+
+<h2>17. Tips for someone new to Next.js</h2>
+
+<ul>
+  <li><strong>Read <code>AGENTS.md</code> first</strong>. It says the version of Next.js used here has breaking changes from older guides &mdash; check <code>node_modules/next/dist/docs/</code> for the canonical reference, not random blog posts.</li>
+  <li><strong>"use client" is a one-way contract</strong>. Once you mark a component client-side, every component it imports also becomes client-side. Keep your client components small, leave the heavy lifting in server components.</li>
+  <li><strong>Server components do not have hooks</strong>. No <code>useState</code>, no <code>useEffect</code>, no event handlers. They run once on the server, return HTML, that is it.</li>
+  <li><strong>Folders matter</strong>. <code>page.tsx</code>, <code>layout.tsx</code>, <code>route.ts</code>, <code>loading.tsx</code>, <code>not-found.tsx</code> all have specific meanings to Next.js. Other file names are ignored.</li>
+  <li><strong>Brackets in folder names mean dynamic segments</strong>. <code>[slug]</code>, <code>[id]</code>, <code>[...all]</code>. Their values arrive as <code>params</code> in your component.</li>
+  <li><strong>Parentheses mean grouping without affecting URL</strong>. <code>(auth)</code> is for organisation only.</li>
+  <li><strong>Env vars need the <code>NEXT_PUBLIC_</code> prefix to reach the browser</strong>. Anything without it stays server-only. Use that fact for security boundaries.</li>
+  <li><strong>The dev server is fast but the production build is what counts</strong>. Run <code>npm run build</code> before believing anything is "done" &mdash; type errors and config issues only show up there.</li>
+  <li><strong>The <code>.agent/</code> folder is the project's memory</strong>. Read <code>.agent/SESSION_STATE.md</code> and <code>.agent/plans/</code> to understand the history and the planned next steps.</li>
+</ul>
+
+<h2>18. Glossary</h2>
+
+<table>
+  <tr><th>Term</th><th>Plain meaning</th></tr>
+  <tr><td>RAG</td><td>Retrieval-Augmented Generation. Fetch relevant snippets, then feed them to an LLM along with the question.</td></tr>
+  <tr><td>Embedding</td><td>A list of numbers that represents the meaning of a piece of text. Two similar texts have similar embeddings.</td></tr>
+  <tr><td>Vector database</td><td>A database that stores embeddings and answers "find the N most similar to this one" very fast. Pinecone is one.</td></tr>
+  <tr><td>Namespace (Pinecone)</td><td>A logical partition inside an index. Used here for one-per-assistant isolation.</td></tr>
+  <tr><td>Chunk</td><td>A piece of an article (~600 tokens). The unit of retrieval.</td></tr>
+  <tr><td>Token</td><td>Roughly 3/4 of a word for English. LLMs and embeddings count text in tokens.</td></tr>
+  <tr><td>LLM</td><td>Large Language Model &mdash; Claude, GPT-4o, Gemini, etc.</td></tr>
+  <tr><td>System prompt</td><td>The instructions given to the LLM before the user's message. Shapes its behaviour.</td></tr>
+  <tr><td>RLS</td><td>Row-Level Security. Postgres feature that filters rows automatically based on the current user.</td></tr>
+  <tr><td>JWT</td><td>JSON Web Token. The signed string that proves who you are. Stored in a cookie here.</td></tr>
+  <tr><td>Magic link</td><td>One-time sign-in link emailed to the user. No password needed.</td></tr>
+  <tr><td>Slug</td><td>The URL-friendly piece, e.g. <code>my-bot-x9k3</code> in <code>/a/my-bot-x9k3</code>.</td></tr>
+  <tr><td>SSR / Server component</td><td>Rendered on the server, sent as HTML. The default in App Router.</td></tr>
+  <tr><td>Streaming</td><td>The server sends the answer token-by-token as the model produces it, instead of waiting for the whole thing.</td></tr>
+  <tr><td>Tenant</td><td>One customer in a multi-customer app. Here, each signed-in user is a tenant.</td></tr>
+</table>
+
+<hr>
+
+<p class="meta">If you read this far, you understand AskBase well enough to navigate the codebase, debug it, and extend it. Start by reading <code>app/api/chat/route.ts</code> &mdash; it is the spine that ties the database, the auth, and the AI pipeline together in about 200 lines.</p>
+
+</body>
+</html>
