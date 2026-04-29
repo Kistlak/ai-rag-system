@@ -20,7 +20,7 @@ export default function Home() {
               </h1>
               <p className="hidden sm:flex items-center gap-1.5 text-[11px] text-muted-foreground leading-tight mt-0.5">
                 <span className="inline-block h-1 w-1 rounded-full bg-emerald-500" />
-                Live · grounded in recent BBC reporting
+                Live · grounded in recent BBC NEWS reporting
               </p>
             </div>
           </div>
