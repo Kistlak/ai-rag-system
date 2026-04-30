@@ -247,4 +247,4 @@ If you want to extend AskBase, the cleanest path is to read the relevant plan fi
 
 ## License
 
-No license file is included yet - treat this as **all rights reserved** for now.
+No license file is included yet - treat this as **all rights reserved** for now..
